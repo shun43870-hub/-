@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>地震情報可視化ツール開発者版</title>
+    <title>地震情報可視化ツール</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -90,6 +90,83 @@
         flex-grow: 1; overflow-y: auto; padding: 8px; scroll-behavior: smooth; 
     }
     #list-container::-webkit-scrollbar, #tsunami-list-container::-webkit-scrollbar, #kyoshin-list-container::-webkit-scrollbar { width: 0px; }
+    /* ========== 過去地震検索パネル ========== */
+    #search-form-area {
+        padding: 12px 10px 8px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex; flex-direction: column; gap: 8px;
+    }
+    .search-row {
+        display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    }
+    .search-label {
+        font-size: 11px; font-weight: 600; color: var(--text-secondary);
+        white-space: nowrap; min-width: 52px;
+    }
+    .search-input {
+        flex: 1; background: rgba(255,255,255,0.08); color: #fff;
+        border: 1px solid rgba(255,255,255,0.15); border-radius: 7px;
+        padding: 6px 8px; outline: none; font-size: 13px;
+        font-family: var(--font-family); color-scheme: dark;
+    }
+    .search-input:focus { border-color: var(--accent-color); }
+    #search-execute-btn {
+        width: 100%; padding: 10px; border-radius: 9px;
+        background: rgba(10, 132, 255, 0.25); border: 1px solid #0A84FF;
+        color: #64D2FF; font-size: 14px; font-weight: 700;
+        cursor: pointer; font-family: var(--font-family);
+        transition: background 0.2s;
+    }
+    #search-execute-btn:hover { background: rgba(10, 132, 255, 0.4); }
+    #search-execute-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    #search-status-bar {
+        font-size: 11px; text-align: center; padding: 4px 0 0;
+        color: var(--text-secondary); min-height: 16px;
+    }
+    #search-list-container {
+        flex-grow: 1; overflow-y: auto; padding: 6px 8px;
+    }
+    #search-list-container { scrollbar-width: none; -ms-overflow-style: none; }
+    #search-list-container::-webkit-scrollbar { width: 0px; height: 0px; }
+    /* ポートレート: 検索フォームごとスクロール */
+    @media (orientation: portrait) and (max-width: 768px) {
+        #content-search {
+            overflow-y: auto !important;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        #content-search::-webkit-scrollbar { width: 0px; height: 0px; }
+        #search-form-area {
+            flex-shrink: 0;
+        }
+        #search-list-container {
+            overflow-y: visible !important;
+            flex-grow: 0;
+        }
+    }
+    .search-result-item {
+        padding: 10px 10px; margin-bottom: 4px; border-radius: 8px;
+        cursor: pointer; border-left: 4px solid transparent;
+        background: rgba(255,255,255,0.02);
+        transition: background-color 0.2s;
+    }
+    .search-result-item:hover { background-color: rgba(255,255,255,0.08); }
+    .search-result-item.active { background-color: rgba(255,255,255,0.13); }
+    .search-result-item.loading { opacity: 0.5; cursor: wait; }
+    .sri-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }
+    .sri-name { font-size: 14px; font-weight: 700; }
+    .sri-mag { font-size: 13px; font-weight: 700; color: #FFD60A; }
+    .sri-bottom { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-secondary); }
+    .sri-time { }
+    .sri-depth { }
+    #search-load-more {
+        width: 100%; padding: 9px; border-radius: 8px; margin-top: 6px;
+        background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15);
+        color: var(--text-secondary); font-size: 13px; cursor: pointer;
+        font-family: var(--font-family); display: none;
+    }
+    #search-load-more:hover { background: rgba(255,255,255,0.12); }
+
     .list-item, .t-list-item {
         padding: 12px 10px; margin-bottom: 4px; border-radius: 8px; cursor: pointer; 
         border-left: 4px solid transparent; background: rgba(255,255,255,0.02);
@@ -480,6 +557,13 @@
     </svg>
 </div>
 
+<div class="nav-btn" onclick="toggleDrawer('search')" id="btn-search" title="過去地震検索" aria-label="過去地震検索を開く" role="button" tabindex="0">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+    </svg>
+</div>
+
 </div>
 
 <div class="nav-group">
@@ -577,6 +661,53 @@
     </div>
 </div>
 
+</div>
+
+<div id="content-search" class="drawer-content" style="flex-direction: column;">
+    <div id="search-form-area">
+        <div class="search-row">
+            <span class="search-label">開始日</span>
+            <input type="date" id="search-start" class="search-input" aria-label="検索開始日">
+        </div>
+        <div class="search-row">
+            <span class="search-label">終了日</span>
+            <input type="date" id="search-end" class="search-input" aria-label="検索終了日">
+        </div>
+        <div class="search-row">
+            <span class="search-label">最小M</span>
+            <input type="number" id="search-minmag" class="search-input" value="0.0" min="0" max="9.9" step="0.1" aria-label="最小マグニチュード">
+        </div>
+        <div class="search-row">
+            <span class="search-label">最大震度</span>
+            <select id="search-maxint" class="search-input" aria-label="最大震度フィルター">
+                <option value="1">指定なし（震度1以上）</option>
+                <option value="2">震度2以上</option>
+                <option value="3">震度3以上</option>
+                <option value="4">震度4以上</option>
+                <option value="A">震度5弱以上</option>
+                <option value="B">震度5強以上</option>
+                <option value="C">震度6弱以上</option>
+                <option value="D">震度6強以上</option>
+                <option value="7">震度7</option>
+            </select>
+        </div>
+        <div class="search-row">
+            <span class="search-label">並び順</span>
+            <select id="search-sort" class="search-input" aria-label="並び順">
+                <option value="S0">新しい順</option>
+                <option value="S1">古い順</option>
+                <option value="S2">最大震度の大きい順</option>
+                <option value="S3">地震の規模の大きい順</option>
+            </select>
+        </div>
+        <button id="search-execute-btn" onclick="executeEqSearch()">🔍 検索</button>
+        <div id="search-status-bar"></div>
+    </div>
+    <div id="search-list-container">
+        <div style="padding: 20px 0; text-align: center; color: var(--text-secondary); font-size: 13px;">
+            条件を指定して検索してください
+        </div>
+    </div>
 </div>
 
 </div>
@@ -781,6 +912,16 @@
             </div>
             <label class="clock-toggle-switch">
                 <input type="checkbox" id="eew-intensity-map-toggle" aria-label="EEW予想震度分布の表示切り替え">
+                <span class="clock-slider"></span>
+            </label>
+        </div>
+        <div class="sp-info" style="align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px;">
+            <div style="display:flex; flex-direction:column; text-align:left; flex: 1; padding-right: 12px;">
+                <span style="color: #fff; font-weight: bold; font-family: inherit;">凡例の表示</span>
+                <span style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">地図右下の震度凡例を表示します。</span>
+            </div>
+            <label class="clock-toggle-switch">
+                <input type="checkbox" id="legend-toggle" aria-label="凡例の表示切り替え">
                 <span class="clock-slider"></span>
             </label>
         </div>
@@ -1098,7 +1239,7 @@
     // ==========================================
     const isHttps = window.location.protocol === 'https:';
     const isElectron = window.location.protocol === 'file:' || window.location.protocol === 'app:';
-    let useProxyForImage = isHttps;
+    let useProxyForImage = !isElectron;
     let useProxyForJSON = isHttps;
     const PROXY_BASE = "https://api.codetabs.com/v1/proxy?quest=";
 
@@ -1353,7 +1494,13 @@
 
     // 🚨 表示設定 UI ＆ 期間指定バッジ
     // ==========================================
-    let displayConfig = JSON.parse(localStorage.getItem('eq_displayConfig')) || { showEstimatedIntensity: true, showFeltEarthquakes: true, showMicroEarthquakes: false, useCustomDateRange: false, startDate: "", endDate: "", eewMapMode: "alert", showRegionalIntensity: true, badgeStyle: "A", badgeScale: 1.0 };
+    let displayConfig = JSON.parse(localStorage.getItem('eq_displayConfig')) || { showEstimatedIntensity: true, showFeltEarthquakes: true, showMicroEarthquakes: false, useCustomDateRange: false, startDate: "", endDate: "", eewMapMode: "alert", showRegionalIntensity: false, showLegend: true, badgeStyle: "A", badgeScale: 1.0 };
+
+    if (displayConfig.showLegend === undefined) displayConfig.showLegend = true;
+    displayConfig.showRegionalIntensity = false;
+    displayConfig.showMicroEarthquakes  = false;
+    displayConfig.useCustomDateRange    = false;
+    localStorage.setItem('eq_displayConfig', JSON.stringify(displayConfig));
 
     const jrisqToggleBtn = document.getElementById('jrisq-toggle-btn');
     const feltEqToggleBtn = document.getElementById('felt-eq-toggle-btn');
@@ -1415,6 +1562,16 @@
     };
 
     // 地域震度トグル
+    const legendToggle = document.getElementById('legend-toggle');
+    if (legendToggle) {
+        legendToggle.checked = (displayConfig.showLegend !== false);
+        legendToggle.onchange = function() {
+            displayConfig.showLegend = this.checked;
+            localStorage.setItem('eq_displayConfig', JSON.stringify(displayConfig));
+            applyLegendVisibility();
+        };
+    }
+
     const regionalIntensityToggle = document.getElementById('regional-intensity-toggle');
     if (regionalIntensityToggle) {
         regionalIntensityToggle.checked = (displayConfig.showRegionalIntensity !== false);
@@ -2261,10 +2418,11 @@
         },
         updateData: function(dataArray) {
             if (!dataArray || !Array.isArray(dataArray)) return;
-            this._data = dataArray.sort((a, b) => calcIntensityFromColor(a.color) - calcIntensityFromColor(b.color)); this.redraw();
+            this._data = dataArray.sort((a, b) => calcIntensityFromColor(a.color) - calcIntensityFromColor(b.color));
+            if (this._map && this._ctx) this.redraw();
         },
         redraw: function () {
-            if (!this._ctx) return;
+            if (!this._map || !this._ctx) return;
             const ctx = this._ctx; ctx.clearRect(0, 0, this._canvas.width, this._canvas.height); const zoom = this._map.getZoom();
 
             for (let i = 0; i < this._data.length; i++) {
@@ -3375,11 +3533,12 @@
         document.getElementById(`btn-${mode}`).classList.add('active');
         document.querySelectorAll('.drawer-content').forEach(c => c.classList.remove('active'));
         document.getElementById(`content-${mode}`).classList.add('active');
-        const titles = { 'history': '地震履歴', 'tsunami': '津波情報', 'kyoshin': '強震モニタ' };
-        document.getElementById('drawer-title').innerText = titles[mode];
+        const titles = { 'history': '地震履歴', 'tsunami': '津波情報', 'kyoshin': '強震モニタ', 'search': '過去地震検索' };
+        document.getElementById('drawer-title').innerText = titles[mode] || mode;
     }
 
     window.closeDrawer = function() { document.body.classList.remove('drawer-open'); document.getElementById('drawer-panel').classList.remove('open'); };
+    function isPortrait() { return window.innerHeight > window.innerWidth; }
 
     function ensureMode(mode) {
         if (currentMode !== mode) {
@@ -3388,8 +3547,8 @@
             document.getElementById(`btn-${mode}`).classList.add('active');
             document.querySelectorAll('.drawer-content').forEach(c => c.classList.remove('active'));
             document.getElementById(`content-${mode}`).classList.add('active');
-            const titles = { 'history': '地震履歴', 'tsunami': '津波情報', 'kyoshin': '強震モニタ' };
-            document.getElementById('drawer-title').innerText = titles[mode];
+            const titles = { 'history': '地震履歴', 'tsunami': '津波情報', 'kyoshin': '強震モニタ', 'search': '過去地震検索' };
+            document.getElementById('drawer-title').innerText = titles[mode] || mode;
         }
     }
 
@@ -4149,8 +4308,372 @@
     const legend = L.control({position: 'bottomright'});
     legend.onAdd = function () { legendDiv = L.DomUtil.create('div', 'legend'); updateLegend('earthquake'); return legendDiv; };
     legend.addTo(map);
+    function applyLegendVisibility() {
+        if (!legendDiv) return;
+        legendDiv.style.display = (displayConfig.showLegend !== false) ? '' : 'none';
+    }
+    applyLegendVisibility();
+
 
     const style = document.createElement('style'); style.innerHTML = `.custom-tooltip { background: rgba(0,0,0,0.8); border: 1px solid #555; color: #fff; font-size: 11px; backdrop-filter: blur(10px); }`; document.head.appendChild(style);
+
+    function depthLabel(depth) {
+        if (depth === 0) return 'ごく浅い';
+        if (!depth || depth < 0) return '不明';
+        return depth + 'km';
+    }
+
+    function intensityStringToScale(str) {
+        const m = {
+            '震度１':10,'震度1':10,'震度２':20,'震度2':20,'震度３':30,'震度3':30,
+            '震度４':40,'震度4':40,'震度５弱':45,'震度5弱':45,'震度５強':50,'震度5強':50,
+            '震度６弱':55,'震度6弱':55,'震度６強':60,'震度6強':60,'震度７':70,'震度7':70
+        };
+        return m[str] || 0;
+    }
+
+    // ============================================================
+    // 過去地震検索機能（気象庁eqdb 直接検索）
+    // ============================================================
+    (function() {
+        const EQDB_API = 'https://www.data.jma.go.jp/eqdb/data/shindo/api/';
+
+        let searchResults = [];
+        let isSearching   = false;
+
+        // デフォルト日付セット
+        const today = new Date();
+        const oneMonthAgo = new Date(today);
+        oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+        const fmt = d => d.toISOString().slice(0, 10);
+        const twoDaysAgo = new Date(today); twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+        document.getElementById('search-start').value = fmt(oneMonthAgo);
+        document.getElementById('search-end').value   = fmt(twoDaysAgo);
+
+        // JST id → 表示用文字列 "YYYY/MM/DD HH:MM:SS"
+        function jstIdToDisplay(id) {
+            return `${id.slice(0,4)}/${id.slice(4,6)}/${id.slice(6,8)} ${id.slice(8,10)}:${id.slice(10,12)}:${id.slice(12,14)}`;
+        }
+
+        // eqdb mode=search
+        async function fetchEqdbSearch(startDate, endDate, minMag, maxInt, sort) {
+            // デフォルト値（mag:0.0、maxInt:1）から変化があればadditionalC=trueでサーバー側フィルター有効化
+            const isFiltered = parseFloat(minMag) > 0.0 || maxInt !== '1';
+            const fd = new FormData();
+            fd.append('mode',          'search');
+            fd.append('dateTimeF[]',   startDate);
+            fd.append('dateTimeF[]',   '00:00');
+            fd.append('dateTimeT[]',   endDate);
+            fd.append('dateTimeT[]',   '23:59');
+            fd.append('mag[]',         String(minMag));
+            fd.append('mag[]',         '9.9');
+            fd.append('dep[]',         '000');
+            fd.append('dep[]',         '999');
+            fd.append('epi[]',         '99');
+            fd.append('pref[]',        '99');
+            fd.append('city[]',        '99');
+            fd.append('station[]',     '99');
+            fd.append('obsInt',        '1');
+            fd.append('maxInt',        String(maxInt));
+            fd.append('additionalC',   isFiltered ? 'true' : 'false');
+            fd.append('Sort',          sort || 'S0');
+            fd.append('Comp',          'C0');
+            fd.append('seisCount',     'false');
+            fd.append('observed',      'false');
+            fd.append('strParam',      '[object Object]');
+
+            const res = await fetch(EQDB_API, { method: 'POST', body: fd });
+            if (!res.ok) throw new Error(`eqdb HTTP ${res.status}`);
+            const data = await res.json();
+            if (!data.res || !Array.isArray(data.res)) throw new Error('レスポンス形式エラー');
+            return data;
+        }
+
+        // eqdb mode=event（詳細1件）
+        async function fetchEqdbEvent(id) {
+            const fd = new FormData();
+            fd.append('mode', 'event');
+            fd.append('id',   id);
+            const res = await fetch(EQDB_API, { method: 'POST', body: fd });
+            if (!res.ok) return null;
+            const data = await res.json();
+            if (data.res && data.res.hyp && data.res.hyp.length > 0) return data.res;
+            return null;
+        }
+
+        // 検索リスト描画
+        function renderSearchList(items) {
+            const container = document.getElementById('search-list-container');
+            container.innerHTML = '';
+
+            if (items.length === 0) {
+                container.innerHTML = '<div style="padding:20px 0;text-align:center;color:var(--text-secondary);font-size:13px;">該当する地震が見つかりませんでした</div>';
+                return;
+            }
+
+            items.forEach(eq => {
+                const mag    = parseFloat(eq.mag);
+                const depRaw = (eq.dep || '').replace(' km', '').trim();
+                const depth  = depRaw === '0' ? 'ごく浅い' : depRaw;
+                const maxI   = (eq.maxI || '').replace('震度', '');
+                const scale  = intensityStringToScale(eq.maxI || '');
+                const color  = scale > 0 ? getIntensityColor(scale) : '#8E8E93';
+                const label  = scale > 0 ? `震度${maxI}` : `M${mag.toFixed(1)}`;
+
+                const item = document.createElement('div');
+                item.className = 'list-item';
+                item.style.borderLeftColor = color;
+                item.dataset.eqId = eq.id;
+                item.innerHTML = `
+                    <div class="list-item-title">
+                        <span>${eq.name}</span>
+                        <span style="color:${color}; font-size:13px;">${label}</span>
+                    </div>
+                    <div class="list-item-details">${eq.ot.slice(0,16)} | M${mag.toFixed(1)} | 深さ${depth}${depth === 'ごく浅い' ? '' : 'km'}</div>`;
+                item.addEventListener('click', () => onItemClick(item, eq));
+                container.appendChild(item);
+            });
+        }
+
+
+        // eqdbデータを詳細パネルに表示
+        function showEqdbDetail(res, timeId) {
+            const hyp = res.hyp[0];
+            const intPoints = res.int || [];
+
+            const lat   = parseFloat(hyp.lat);
+            const lon   = parseFloat(hyp.lon);
+            const mag   = parseFloat(hyp.mag);
+            const depM  = hyp.dep.match(/\d+/);
+            const depth = depM ? parseInt(depM[0]) : 0;
+            const maxI  = hyp.maxI || '';
+            const maxScale = intensityStringToScale(maxI);
+            const mainColor = getIntensityColor(maxScale);
+
+            closeDetailPanel();
+            map.removeLayer(allEarthquakesLayer);
+            detailLayer.clearLayers();
+            if (!map.hasLayer(detailLayer)) map.addLayer(detailLayer);
+
+            // 震央マーカー
+            const epicIcon = L.divIcon({ className: 'custom-div-icon', html: '<div class="eew-marker-cross"></div>', iconSize: [0, 0] });
+            L.marker([lat, lon], { icon: epicIcon, zIndexOffset: 20000 }).addTo(detailLayer);
+
+            // 観測点描画
+            const stationDrawData = [];
+            const bounds = [[lat, lon]];
+            const sorted = [...intPoints].sort((a, b) => intensityStringToScale(b.int) - intensityStringToScale(a.int));
+
+            sorted.forEach(pt => {
+                const scale = intensityStringToScale(pt.int);
+                if (scale <= 0) return;
+                const ptLat = parseFloat(pt.lat), ptLon = parseFloat(pt.lon);
+                stationDrawData.push({
+                    lat: ptLat, lon: ptLon,
+                    color: getIntensityColor(scale),
+                    scale: scale,
+                    text: getShortIntensityString(scale),
+                    name: pt.name,
+                    fullText: getIntensityString(scale)
+                });
+                bounds.push([ptLat, ptLon]);
+            });
+
+            if (stationDrawData.length > 0) {
+                regionalIntensityLayer.clear();
+                if (map.hasLayer(regionalIntensityLayer)) map.removeLayer(regionalIntensityLayer);
+                if (!map.hasLayer(stationLayer)) map.addLayer(stationLayer);
+                stationLayer.updateData(stationDrawData);
+            }
+
+            // 観測点リスト
+            const stationsListEl = document.getElementById('dp-stations-list');
+            stationsListEl.innerHTML = '';
+            sorted.forEach(pt => {
+                const scale = intensityStringToScale(pt.int);
+                if (scale <= 0) return;
+                const item = document.createElement('div');
+                item.className = 'dp-station-item';
+                item.innerHTML = `<span class="dp-station-name">${pt.name}</span><span class="dp-station-scale" style="background-color:${getIntensityColor(scale)};">${getIntensityString(scale)}</span>`;
+                stationsListEl.appendChild(item);
+            });
+
+            // ヘッダー情報
+            document.getElementById('dp-scale-label').innerText = '最大震度';
+            const scaleEl = document.getElementById('dp-scale');
+            const maxIDisplay = maxI.replace('震度', '');
+            scaleEl.innerText = maxIDisplay || '-';
+            scaleEl.style.color = mainColor;
+            scaleEl.style.fontSize = '32px';
+            document.getElementById('dp-box').style.borderColor = mainColor;
+            document.getElementById('dp-box').style.background = 'rgba(0,0,0,0.3)';
+            document.getElementById('dp-name').innerText  = hyp.name || '';
+            document.getElementById('dp-name').title      = hyp.name || '';
+            document.getElementById('dp-time').innerText  = jstIdToDisplay(timeId) + ' 発生';
+            document.getElementById('dp-mag').innerText   = mag.toFixed(1);
+            document.getElementById('dp-depth').innerText = (depth === 0 || depth === '0') ? 'ごく浅い' : depth;
+            const depUnit = document.getElementById('dp-depth-unit');
+            if (depUnit) depUnit.style.display = (depth === 0 || depth === '0') ? 'none' : '';
+            document.getElementById('dp-comments-text').innerText = '気象庁震度データベースより取得';
+            document.getElementById('dp-extended-area').classList.add('collapsed');
+            document.getElementById('dp-toggle-btn').innerHTML = '詳細情報を表示 ▼';
+            const archiveContainer = document.getElementById('dp-archive-btn-container');
+            if (archiveContainer) { archiveContainer.innerHTML = ''; archiveContainer.style.display = 'none'; }
+            document.getElementById('show-eew-btn').style.display = 'none';
+            document.getElementById('detail-panel').style.backgroundColor = 'rgba(28, 28, 30, 0.45)';
+            document.getElementById('detail-panel').classList.add('show');
+            document.getElementById('dp-extended-area').scrollTop = 0;
+
+            map.invalidateSize();
+            if (bounds.length > 2) {
+                map.fitBounds(bounds, { padding: [40, 40], maxZoom: 8, animate: true });
+            } else {
+                map.setView([lat, lon], 7, { animate: true, duration: 0.5 });
+            }
+
+            // 震度5弱以上なら推計震度分布
+            if (maxScale >= 45) {
+                showJmaEstimatedIntensity(jstIdToDisplay(timeId).replace(/\//g, '/'), maxScale);
+            }
+        }
+
+        // アイテムクリック
+        async function onItemClick(itemEl, eq) {
+            document.querySelectorAll('#search-list-container .list-item').forEach(el => el.classList.remove('active'));
+            itemEl.classList.add('active', 'loading');
+            if (isPortrait()) closeDrawer();
+            setStatus(`「${eq.name}」の震度データを取得中...`);
+
+            const detail = await fetchEqdbEvent(eq.id);
+            itemEl.classList.remove('loading');
+
+            if (!detail) {
+                setStatus('詳細データの取得に失敗しました');
+                // list情報だけでフォールバック表示
+                showEqListFallback(eq);
+                return;
+            }
+
+            setStatus(`取得完了: ${eq.ot.slice(0,16)}`);
+            showEqdbDetail(detail, eq.id);
+        }
+
+        // 詳細取得失敗時：listデータだけで地図表示
+        function showEqListFallback(eq) {
+            const lat   = parseFloat(eq.lat);
+            const lon   = parseFloat(eq.lon);
+            const mag   = parseFloat(eq.mag);
+            const depth = parseInt((eq.dep || '0'));
+            const maxI  = eq.maxI || '';
+            const scale = intensityStringToScale(maxI);
+            const color = scale > 0 ? getIntensityColor(scale) : getMagnitudeColor(mag);
+
+            closeDetailPanel();
+            map.removeLayer(allEarthquakesLayer);
+            detailLayer.clearLayers();
+            if (!map.hasLayer(detailLayer)) map.addLayer(detailLayer);
+
+            const epicIcon = L.divIcon({ className: 'custom-div-icon', html: '<div class="eew-marker-cross"></div>', iconSize: [0, 0] });
+            L.marker([lat, lon], { icon: epicIcon, zIndexOffset: 20000 }).addTo(detailLayer);
+
+            document.getElementById('dp-scale-label').innerText = '最大震度';
+            const scaleEl = document.getElementById('dp-scale');
+            const maxIDisplay = maxI.replace('震度','');
+            scaleEl.innerText = maxIDisplay || '-';
+            scaleEl.style.color = color;
+            scaleEl.style.fontSize = '38px';
+            document.getElementById('dp-box').style.borderColor = color;
+            document.getElementById('dp-box').style.background = 'rgba(0,0,0,0.3)';
+            document.getElementById('dp-name').innerText  = eq.name;
+            document.getElementById('dp-name').title      = eq.name;
+            document.getElementById('dp-time').innerText  = eq.ot.slice(0,16) + ' 発生';
+            document.getElementById('dp-mag').innerText   = mag.toFixed(1);
+            document.getElementById('dp-depth').innerText = (depth === 0 || depth === '0') ? 'ごく浅い' : depth;
+            const depUnit = document.getElementById('dp-depth-unit');
+            if (depUnit) depUnit.style.display = (depth === 0 || depth === '0') ? 'none' : '';
+            document.getElementById('dp-comments-text').innerText = '震度観測点データなし（リスト情報のみ）';
+            document.getElementById('dp-stations-list').innerHTML = '';
+            document.getElementById('dp-extended-area').classList.add('collapsed');
+            document.getElementById('dp-toggle-btn').innerHTML = '詳細情報を表示 ▼';
+            document.getElementById('show-eew-btn').style.display = 'none';
+            document.getElementById('detail-panel').style.backgroundColor = 'rgba(28,28,30,0.45)';
+            document.getElementById('detail-panel').classList.add('show');
+            document.getElementById('dp-archive-btn-container').innerHTML = '';
+
+            map.invalidateSize();
+            map.setView([lat, lon], 7, { animate: true });
+        }
+
+        function getMagnitudeColor(mag) {
+            if (mag >= 7.0) return '#FF453A';
+            if (mag >= 6.0) return '#FF9F0A';
+            if (mag >= 5.0) return '#FFD60A';
+            if (mag >= 4.0) return '#32D74B';
+            return '#64D2FF';
+        }
+
+        function setStatus(msg) {
+            document.getElementById('search-status-bar').innerText = msg;
+        }
+
+        // 検索実行
+        window.executeEqSearch = async function() {
+            if (isSearching) return;
+            const startDate = document.getElementById('search-start').value;
+            const endDate   = document.getElementById('search-end').value;
+            const minMag    = parseFloat(document.getElementById('search-minmag').value) || 0.0;
+            const maxInt    = document.getElementById('search-maxint').value || '1';
+            const sort      = document.getElementById('search-sort').value || 'S0';
+
+            if (!startDate || !endDate) { setStatus('日付を入力してください'); return; }
+
+            isSearching = true;
+            const btn = document.getElementById('search-execute-btn');
+            btn.disabled = true;
+            setStatus('気象庁震度データベースを検索中...');
+
+            try {
+                const data = await fetchEqdbSearch(startDate, endDate, minMag, maxInt, sort);
+                // data.strにエラーや注意メッセージが入る場合がある
+                const strMsgs = Array.isArray(data.str) ? data.str : [];
+                const errMsg  = strMsgs.find(s => s.includes('ありません') || s.includes('エラー') || s.includes('見直し'));
+                if (errMsg) {
+                    setStatus('⚠ ' + errMsg);
+                    renderSearchList([]);
+                    return;
+                }
+                const allRes = data.res || [];
+                // サーバー側フィルター（additionalC=true）に加え、念のためクライアント側でも絞り込む
+                const maxIntScaleMap = {'1':10,'2':20,'3':30,'4':40,'A':45,'B':50,'C':55,'D':60,'7':70};
+                const maxIntScale = maxIntScaleMap[maxInt] || 10;
+                searchResults = allRes.filter(eq => {
+                    const magOk = minMag <= 0 || parseFloat(eq.mag) >= minMag;
+                    const intOk = maxInt === '1' || intensityStringToScale(eq.maxI || '') >= maxIntScale;
+                    return magOk && intOk;
+                });
+                // S2・S3 はサーバー側で対応していない可能性があるためクライアント側でも並び替え
+                if (sort === 'S2') {
+                    searchResults.sort((a, b) => intensityStringToScale(b.maxI || '') - intensityStringToScale(a.maxI || '') || parseFloat(b.mag) - parseFloat(a.mag));
+                } else if (sort === 'S3') {
+                    searchResults.sort((a, b) => parseFloat(b.mag) - parseFloat(a.mag) || intensityStringToScale(b.maxI || '') - intensityStringToScale(a.maxI || ''));
+                }
+                const totalCount    = allRes.length;
+                const filteredCount = searchResults.length;
+                const serverSummary = strMsgs[1] || '';
+                const countLabel = totalCount !== filteredCount
+                    ? `${filteredCount}件（取得${totalCount}件からM${minMag}以上でフィルター）`
+                    : (serverSummary || `${filteredCount}件`);
+                renderSearchList(searchResults);
+                setStatus(countLabel);
+            } catch(e) {
+                setStatus(`エラー: ${e.message}`);
+            } finally {
+                isSearching = false;
+                btn.disabled = false;
+            }
+        };
+
+    })();
 </script>
 
 </body>
