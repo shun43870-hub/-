@@ -2676,8 +2676,13 @@
         eewState.data = data; 
         eewState.lastUpdated = Date.now();
 
-        if (!eewState.layerGroup.hasLayer(eewState.pCircle)) eewState.pCircle.addTo(eewState.layerGroup);
-        if (!eewState.layerGroup.hasLayer(eewState.sCircle)) eewState.sCircle.addTo(eewState.layerGroup);
+        if (!isPlum) {
+            if (!eewState.layerGroup.hasLayer(eewState.pCircle)) eewState.pCircle.addTo(eewState.layerGroup);
+            if (!eewState.layerGroup.hasLayer(eewState.sCircle)) eewState.sCircle.addTo(eewState.layerGroup);
+        } else {
+            if (eewState.layerGroup.hasLayer(eewState.pCircle)) eewState.layerGroup.removeLayer(eewState.pCircle);
+            if (eewState.layerGroup.hasLayer(eewState.sCircle)) eewState.layerGroup.removeLayer(eewState.sCircle);
+        }
         if (!eewState.layerGroup.hasLayer(eewState.alertLayer)) eewState.alertLayer.addTo(eewState.layerGroup);
 
         if (data.latitude && data.longitude) {
